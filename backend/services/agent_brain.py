@@ -19,7 +19,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Routine tick model (fast + cheap). Major life events will use sonnet later.
-ROUTINE_MODEL = "claude-haiku-4-5"
+ROUTINE_MODEL = "claude-haiku-4-5-20251001"
+MAJOR_MODEL = "claude-sonnet-4-6"
 
 
 def _clamp(value: int, low: int = 0, high: int = 100) -> int:

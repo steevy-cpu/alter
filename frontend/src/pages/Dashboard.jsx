@@ -58,7 +58,11 @@ export default function Dashboard() {
           return
         }
         setAgent(loaded)
-        if (loaded.state) updateEmotionalState(loaded.state)
+        if (loaded.state) {
+          const s = loaded.state
+          const looksValid = !(s.energy === 0 && s.stress === 0)
+          if (looksValid) updateEmotionalState(s)
+        }
 
         const feed = await getEventFeed()
         if (!active) return

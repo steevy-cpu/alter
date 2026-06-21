@@ -16,7 +16,7 @@ from core.database import get_db
 logger = logging.getLogger(__name__)
 
 # Routine summarization model.
-SUMMARY_MODEL = "claude-haiku-4-5"
+SUMMARY_MODEL = "claude-haiku-4-5-20251001"
 
 
 class MemoryService:
