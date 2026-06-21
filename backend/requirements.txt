@@ -5,7 +5,7 @@ supabase
 anthropic
 apscheduler
 websockets
-pydantic
+pydantic[email]
 pydantic-settings
 python-jose[cryptography]
 passlib[bcrypt]
