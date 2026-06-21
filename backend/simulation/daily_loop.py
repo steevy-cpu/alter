@@ -23,12 +23,15 @@ from core.config import settings
 from core.database import get_db
 from core.websocket_manager import manager
 from services.agent_brain import AgentBrain
+from services.memory_service import MemoryService
 
 logger = logging.getLogger(__name__)
 
-# Module-level singletons — one client + brain shared across all ticks.
+# Module-level singletons — one client + brain + memory service shared across
+# all ticks.
 _anthropic_client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 _brain = AgentBrain(_anthropic_client)
+_memory_service = MemoryService()
 
 
 def build_narrative_content(day_plan: dict, events: list[dict], reflection: dict) -> str:
@@ -90,22 +93,16 @@ async def process_single_agent(agent: dict, state: dict, game_day: int) -> None:
         "current_focus": state.get("current_focus"),
     }
 
-    # Step 3 — fetch recent memories (last 5).
-    memories: list[str] = []
-    try:
-        mem_res = (
-            db.table("agent_memories")
-            .select("content")
-            .eq("agent_id", agent["id"])
-            .order("created_at", desc=True)
-            .limit(5)
-            .execute()
-        )
-        memories = [row["content"] for row in (mem_res.data or []) if row.get("content")]
-    except Exception:  # noqa: BLE001
-        logger.exception("[%s day %s] failed to fetch memories", name, game_day)
-    if not memories:
-        memories = ["This is the first day of your life in this world."]
+    # Step 3 — retrieve relevant memories via the memory service (full-text
+    # search keyed on the agent's goals + occupation, recency fallback).
+    memories_raw = await _memory_service.retrieve_relevant(
+        agent_id=agent["id"],
+        query=f"{agent_profile['goals']} {agent_profile['occupation']}",
+        limit=5,
+    )
+    memories = memories_raw if memories_raw else [
+        "This is the first day of your life in this world."
+    ]
 
     # Step 4 — day plan.
     day_plan = await _brain.generate_day_plan(agent_profile, memories, emotional_state, game_day)
@@ -178,22 +175,24 @@ async def process_single_agent(agent: dict, state: dict, game_day: int) -> None:
     except Exception:  # noqa: BLE001
         logger.exception("[%s day %s] failed to insert game_events", name, game_day)
 
-    # 8c) Store the memory_to_keep as a reflection memory.
-    memory_to_keep = reflection.get("memory_to_keep")
-    if memory_to_keep:
-        try:
-            db.table("agent_memories").insert(
-                {
-                    "agent_id": agent["id"],
-                    "content": memory_to_keep,
-                    "memory_type": "reflection",
-                    "emotional_weight": 0.7,
-                    "embedding": None,  # vector embeddings arrive in Phase 2
-                    "game_day": game_day,
-                }
-            ).execute()
-        except Exception:  # noqa: BLE001
-            logger.exception("[%s day %s] failed to insert memory", name, game_day)
+    # 8c) Store the memory_to_keep as a reflection memory via the service.
+    await _memory_service.store_reflection_memory(
+        agent_id=agent["id"],
+        reflection=reflection,
+        game_day=game_day,
+    )
+
+    # Every 7 game days, compress memories into a week summary.
+    agent_start_day = agent.get("starting_game_day", 1)
+    days_lived = game_day - agent_start_day
+    if days_lived > 0 and days_lived % 7 == 0:
+        await _memory_service.summarize_week(
+            agent_id=agent["id"],
+            agent_name=agent_profile["name"],
+            week_end_day=game_day,
+            anthropic_client=_anthropic_client,
+        )
+        logger.info("Week summary generated for %s at day %s", name, game_day)
 
     # Step 9 — broadcast a small delta to the agent's user.
     user_id = agent.get("user_id")
@@ -220,6 +219,7 @@ async def process_single_agent(agent: dict, state: dict, game_day: int) -> None:
             "emotional_state": new_emotional_state,
         },
     }
+    ws_payload["payload"]["days_lived"] = game_day - agent.get("starting_game_day", 1)
     try:
         await manager.send_to_user(user_id, ws_payload)
         logger.info("Broadcast sent to user=%s for agent=%s", user_id, name)

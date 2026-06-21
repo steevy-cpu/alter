@@ -14,6 +14,7 @@ export const useGameStore = create((set) => ({
   currentReflection: null,
   currentDayPlan: null,
   gameDay: 0,
+  daysLived: 0,
 
   // --- Atomic actions ---
   setUser: (user) => set({ user }),
@@ -24,6 +25,7 @@ export const useGameStore = create((set) => ({
   setReflection: (reflection) => set({ currentReflection: reflection }),
   setDayPlan: (plan) => set({ currentDayPlan: plan }),
   setGameDay: (day) => set({ gameDay: day }),
+  setDaysLived: (daysLived) => set({ daysLived }),
   setEventFeed: (eventFeed) => set({ eventFeed }),
 
   // addEvent: a single event OR a full "daily_update" payload.
@@ -52,6 +54,7 @@ export const useGameStore = create((set) => ({
             inner_thought: event.inner_thought,
           },
           gameDay: event.game_day ?? state.gameDay,
+          daysLived: event.days_lived ?? state.daysLived,
         }
       }
       // Single event: prepend.

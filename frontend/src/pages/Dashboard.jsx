@@ -35,6 +35,8 @@ export default function Dashboard() {
   const currentReflection = useGameStore((s) => s.currentReflection)
   const currentDayPlan = useGameStore((s) => s.currentDayPlan)
   const gameDay = useGameStore((s) => s.gameDay)
+  // Proxy for now — a later prompt will use days_lived from the WS payload.
+  const daysLived = useGameStore((s) => s.gameDay)
 
   const setAgent = useGameStore((s) => s.setAgent)
   const setEventFeed = useGameStore((s) => s.setEventFeed)
@@ -112,6 +114,7 @@ export default function Dashboard() {
         agent={agent}
         emotionalState={emotionalState}
         wsConnected={wsConnected}
+        daysLived={daysLived}
       />
 
       <EventFeed events={eventFeed} gameDay={gameDay} />
@@ -132,6 +135,7 @@ const EmotionalStatePanel = memo(function EmotionalStatePanel({
   agent,
   emotionalState,
   wsConnected,
+  daysLived,
 }) {
   return (
     <aside className="card" style={{ position: 'sticky', top: 'var(--space-6)' }}>
@@ -207,6 +211,18 @@ const EmotionalStatePanel = memo(function EmotionalStatePanel({
         />
         {wsConnected ? 'Live' : 'Connecting...'}
       </div>
+
+      {daysLived > 0 && (
+        <p
+          style={{
+            fontSize: '0.78rem',
+            color: 'var(--color-text-muted)',
+            marginTop: 'var(--space-2)',
+          }}
+        >
+          Day {daysLived} of their life
+        </p>
+      )}
     </aside>
   )
 })
