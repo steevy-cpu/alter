@@ -1,19 +1,18 @@
 import axios from 'axios'
 import { createClient } from '@supabase/supabase-js'
 
-// Supabase client — used here for auth token retrieval and across hooks.
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+// Supabase client — auth source of truth, also used by useAuth.
+export const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+)
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
-// Axios instance pointed at the backend.
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
-  headers: { 'Content-Type': 'application/json' },
+  timeout: 15000,
 })
 
-// Attach the current Supabase access token to every request.
+// Request interceptor: attach the current Supabase access token.
 api.interceptors.request.use(async (config) => {
   try {
     const {
@@ -23,51 +22,67 @@ api.interceptors.request.use(async (config) => {
       config.headers.Authorization = `Bearer ${session.access_token}`
     }
   } catch (err) {
-    // Non-fatal: request proceeds unauthenticated and the backend rejects it.
     console.error('Failed to attach auth token', err)
   }
   return config
 })
 
+// Response interceptor: handle auth expiry and network errors.
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error?.response?.status === 401) {
+      try {
+        await supabase.auth.signOut()
+      } catch (e) {
+        console.error('signOut during 401 handling failed', e)
+      }
+      if (typeof window !== 'undefined' && window.location.pathname !== '/auth') {
+        window.location.assign('/auth')
+      }
+    } else if (!error?.response) {
+      console.error('Network error', error?.message || error)
+    }
+    return Promise.reject(error)
+  }
+)
+
 // --- Typed API functions -------------------------------------------------
 
 export async function createAgent(profile) {
-  try {
-    const { data } = await api.post('/agent/create', profile)
-    return data
-  } catch (err) {
-    console.error('createAgent failed', err)
-    throw err
-  }
+  const { data } = await api.post('/agent/create', profile)
+  return data
 }
 
+// Returns null on 404 (no agent yet) instead of throwing.
 export async function getAgent() {
   try {
-    const { data } = await api.get('/agent/')
+    const { data } = await api.get('/agent/me')
     return data
   } catch (err) {
-    console.error('getAgent failed', err)
+    if (err?.response?.status === 404) return null
     throw err
   }
 }
 
-export async function getEventFeed() {
-  try {
-    const { data } = await api.get('/simulation/feed')
-    return data
-  } catch (err) {
-    console.error('getEventFeed failed', err)
-    throw err
-  }
+export async function getAgentState() {
+  const { data } = await api.get('/agent/state')
+  return data
 }
 
+export async function getEventFeed(limit = 50) {
+  const { data } = await api.get('/simulation/feed', { params: { limit } })
+  return data
+}
+
+// Kept for compatibility with hooks/useSimulation.js (world status stub).
 export async function getWorldStatus() {
   try {
     const { data } = await api.get('/world/status')
     return data
   } catch (err) {
     console.error('getWorldStatus failed', err)
-    throw err
+    return null
   }
 }
 

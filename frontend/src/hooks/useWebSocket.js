@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react'
 import { buildSocketUrl } from '../services/websocket.js'
 import { useGameStore } from '../stores/gameStore.js'
 
-// Opens a per-user WebSocket, dispatches incoming messages into the game
-// store by type, and auto-reconnects on drop. Cleanly closes on unmount.
+// Opens a per-user WebSocket, dispatches incoming messages into the game store
+// by type, auto-reconnects on drop, and closes cleanly on unmount.
 export function useWebSocket(userId) {
   const socketRef = useRef(null)
   const reconnectRef = useRef(null)
@@ -23,14 +23,17 @@ export function useWebSocket(userId) {
       const ws = new WebSocket(buildSocketUrl(userId))
       socketRef.current = ws
 
-      ws.onopen = () => {
-        setWsConnected(true)
-      }
+      ws.onopen = () => setWsConnected(true)
 
       ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data)
           switch (message.type) {
+            case 'daily_update':
+              // addEvent applies the whole day transition (events, mood,
+              // reflection, day plan, game day) in one update.
+              addEvent(message.payload)
+              break
             case 'event':
               addEvent(message.payload)
               break
@@ -51,7 +54,6 @@ export function useWebSocket(userId) {
       ws.onclose = () => {
         setWsConnected(false)
         if (!closedByUnmount.current) {
-          // Attempt reconnect after 3 seconds.
           reconnectRef.current = setTimeout(connect, 3000)
         }
       }

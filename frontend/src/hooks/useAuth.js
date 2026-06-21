@@ -1,75 +1,44 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../services/api.js'
-import { useGameStore } from '../stores/gameStore.js'
 
-// Auth hook wrapping Supabase Auth. Exposes the current session/user plus
-// signUp / signIn / signOut helpers.
+// Auth hook wrapping Supabase Auth. The spec's core surface is
+// { user, loading, signOut }; signIn/signUp are also exposed so the existing
+// Auth page keeps working without changes.
 export function useAuth() {
-  const [session, setSession] = useState(null)
+  const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
-  const setUser = useGameStore((s) => s.setUser)
 
   useEffect(() => {
-    let active = true
-
-    supabase.auth
-      .getSession()
-      .then(({ data }) => {
-        if (!active) return
-        setSession(data.session)
-        setUser(data.session?.user ?? null)
-        setLoading(false)
-      })
-      .catch((err) => {
-        console.error('getSession failed', err)
-        setLoading(false)
-      })
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+      setLoading(false)
+    })
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession)
-      setUser(newSession?.user ?? null)
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
     })
 
-    return () => {
-      active = false
-      subscription?.unsubscribe()
-    }
-  }, [setUser])
+    return () => subscription.unsubscribe()
+  }, [])
 
   const signUp = useCallback(async (email, password) => {
-    try {
-      const { data, error } = await supabase.auth.signUp({ email, password })
-      if (error) throw error
-      return { data, isNewUser: true }
-    } catch (err) {
-      console.error('signUp failed', err)
-      throw err
-    }
+    const { data, error } = await supabase.auth.signUp({ email, password })
+    if (error) throw error
+    return { data, isNewUser: true }
   }, [])
 
   const signIn = useCallback(async (email, password) => {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-      if (error) throw error
-      return { data, isNewUser: false }
-    } catch (err) {
-      console.error('signIn failed', err)
-      throw err
-    }
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) throw error
+    return { data, isNewUser: false }
   }, [])
 
   const signOut = useCallback(async () => {
-    try {
-      await supabase.auth.signOut()
-    } catch (err) {
-      console.error('signOut failed', err)
-    }
+    await supabase.auth.signOut()
+    setUser(null)
   }, [])
 
-  return { session, user: session?.user ?? null, loading, signUp, signIn, signOut }
+  return { user, loading, signUp, signIn, signOut }
 }

@@ -317,7 +317,7 @@ export default function Onboarding() {
             </button>
           ) : (
             <button className="btn-primary" onClick={submit} disabled={submitting}>
-              {submitting ? 'Bringing your Alter to life…' : 'Create your Alter'}
+              {submitting ? 'Creating your Alter...' : 'Create your Alter'}
             </button>
           )}
         </div>
