@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+supabase
+anthropic
+apscheduler
+websockets
+pydantic
+pydantic-settings
+python-jose[cryptography]
+passlib[bcrypt]
+httpx
