@@ -21,7 +21,12 @@ router = APIRouter()
 async def get_event_feed(
     limit: int = 50, user_id: str = Depends(get_current_user)
 ) -> list[dict]:
-    """Return the most recent game_events for the current user's agent."""
+    """Return the most recent individual event rows for the user's agent.
+
+    Only returns rows with event_type = "daily_narrative" (the individual
+    event cards). The per-day "day_summary" master row — which holds the large
+    narrative blob and full metadata — is excluded from the feed.
+    """
     db = get_db()
     try:
         agent_res = (
@@ -35,6 +40,7 @@ async def get_event_feed(
             db.table("game_events")
             .select("*")
             .eq("agent_id", agent_id)
+            .eq("event_type", "daily_narrative")
             .order("created_at", desc=True)
             .limit(limit)
             .execute()
@@ -43,3 +49,40 @@ async def get_event_feed(
     except Exception as exc:  # noqa: BLE001
         logger.exception("get_event_feed failed for user=%s", user_id)
         raise HTTPException(status_code=500, detail="get_event_feed failed") from exc
+
+
+@router.get("/day-summary/{game_day}")
+async def get_day_summary(
+    game_day: int, user_id: str = Depends(get_current_user)
+) -> dict:
+    """Return the single day_summary row for a given game_day.
+
+    Used by the reflection panel. Returns 404 if no summary exists for that
+    day for the current user's agent.
+    """
+    db = get_db()
+    try:
+        agent_res = (
+            db.table("agents").select("id").eq("user_id", user_id).limit(1).execute()
+        )
+        if not agent_res.data:
+            raise HTTPException(status_code=404, detail="No agent found")
+        agent_id = agent_res.data[0]["id"]
+
+        summary_res = (
+            db.table("game_events")
+            .select("*")
+            .eq("agent_id", agent_id)
+            .eq("event_type", "day_summary")
+            .eq("game_day", game_day)
+            .limit(1)
+            .execute()
+        )
+        if not summary_res.data:
+            raise HTTPException(status_code=404, detail="No day summary for that day")
+        return summary_res.data[0]
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("get_day_summary failed for user=%s day=%s", user_id, game_day)
+        raise HTTPException(status_code=500, detail="get_day_summary failed") from exc

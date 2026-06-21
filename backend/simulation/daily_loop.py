@@ -147,7 +147,7 @@ async def process_single_agent(agent: dict, state: dict, game_day: int) -> None:
         rows = [
             {
                 "agent_id": agent["id"],
-                "event_type": "daily_narrative",
+                "event_type": "day_summary",
                 "title": day_plan.get("daily_intention"),
                 "content": build_narrative_content(day_plan, events, reflection),
                 "metadata": {
@@ -166,6 +166,10 @@ async def process_single_agent(agent: dict, state: dict, game_day: int) -> None:
                     "event_type": "daily_narrative",
                     "title": event.get("title"),
                     "content": event.get("description"),
+                    "metadata": {
+                        "time_of_day": event.get("time_of_day"),
+                        "event_type": event.get("event_type"),
+                    },
                     "game_day": game_day,
                     "is_public": False,
                 }

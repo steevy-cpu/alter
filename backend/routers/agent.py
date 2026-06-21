@@ -92,6 +92,16 @@ async def create_agent(
 
         agent_id = inserted.data[0]["id"]
 
+        # Record the world's current game day as this agent's starting day.
+        # Requires the starting_game_day column (see migrations/001_*.sql).
+        world_res = (
+            db.table("world_state").select("current_game_day").limit(1).execute()
+        )
+        starting_day = world_res.data[0]["current_game_day"] if world_res.data else 1
+        db.table("agents").update({"starting_game_day": starting_day}).eq(
+            "id", agent_id
+        ).execute()
+
         # Seed default emotional state.
         db.table("agent_state").insert(
             {

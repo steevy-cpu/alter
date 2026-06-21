@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, memo } from 'react'
+import { useEffect, useState, useCallback, useRef, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth.js'
 import { useWebSocket } from '../hooks/useWebSocket.js'
@@ -42,6 +42,7 @@ export default function Dashboard() {
   const setGameDay = useGameStore((s) => s.setGameDay)
 
   const [toast, setToast] = useState(null)
+  const isFirstLoad = useRef(true)
 
   // Initial load: agent + past feed. Redirect to onboarding if no agent.
   useEffect(() => {
@@ -81,8 +82,13 @@ export default function Dashboard() {
   }, [navigate, setAgent, setEventFeed, updateEmotionalState, setGameDay])
 
   // Show a "Day N complete" toast whenever a new day lands via WebSocket.
+  // Skip the very first gameDay value (it comes from the initial REST load).
   useEffect(() => {
     if (!gameDay) return
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false
+      return
+    }
     setToast(`Day ${gameDay} complete`)
     const t = setTimeout(() => setToast(null), 3000)
     return () => clearTimeout(t)
@@ -222,7 +228,7 @@ const EventFeed = memo(function EventFeed({ events, gameDay }) {
       >
         <h2>Your Alter is waking up...</h2>
         <p style={{ color: 'var(--color-text-secondary)', maxWidth: 360 }}>
-          The first tick runs every 30 seconds. Stay here.
+          The first tick runs every 2 minutes. Stay here.
         </p>
       </section>
     )
