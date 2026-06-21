@@ -80,6 +80,11 @@ async def create_agent(
         if existing.data:
             raise HTTPException(status_code=409, detail="Agent already exists for this user")
 
+        # Ensure a profiles row exists first. agents.user_id has a FK to
+        # profiles(id), but Supabase Auth signup does not create a profiles
+        # row, so we upsert one here (idempotent).
+        db.table("profiles").upsert({"id": user_id}).execute()
+
         agent_row = {"user_id": user_id, **payload.model_dump()}
         inserted = db.table("agents").insert(agent_row).execute()
         if not inserted.data:
