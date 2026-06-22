@@ -24,14 +24,16 @@ from core.database import get_db
 from core.websocket_manager import manager
 from services.agent_brain import AgentBrain
 from services.memory_service import MemoryService
+from services.npc_service import NpcService
 
 logger = logging.getLogger(__name__)
 
-# Module-level singletons — one client + brain + memory service shared across
-# all ticks.
+# Module-level singletons — one client + brain + memory/npc service shared
+# across all ticks.
 _anthropic_client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 _brain = AgentBrain(_anthropic_client)
 _memory_service = MemoryService()
+_npc_service = NpcService(_anthropic_client)
 
 
 def build_narrative_content(day_plan: dict, events: list[dict], reflection: dict) -> str:
@@ -92,6 +94,22 @@ async def process_single_agent(agent: dict, state: dict, game_day: int) -> None:
         "loneliness": state.get("loneliness", 40),
         "current_focus": state.get("current_focus"),
     }
+
+    # Step 2b — fetch current relationships and build a compact context string
+    # to inject into the LLM prompts (capped at 5, under ~300 chars).
+    relationships = await _npc_service.get_agent_relationships(agent["id"])
+    if relationships:
+        rel_lines = []
+        for r in relationships[:5]:
+            name = r.get("npc_name", "Someone")
+            rel_type = r.get("relationship_type", "acquaintance")
+            strength = r.get("strength", 30)
+            summary = r.get("summary", "")
+            rel_lines.append(f"- {name} ({rel_type}, bond {strength}/100): {summary}")
+        relationship_context = "\n".join(rel_lines)
+    else:
+        relationship_context = "No established relationships yet."
+    agent_profile["relationship_context"] = relationship_context
 
     # Step 3 — retrieve relevant memories via the memory service (full-text
     # search keyed on the agent's goals + occupation, recency fallback).
@@ -175,6 +193,21 @@ async def process_single_agent(agent: dict, state: dict, game_day: int) -> None:
     except Exception:  # noqa: BLE001
         logger.exception("[%s day %s] failed to insert game_events", name, game_day)
 
+    # 8b2) Update relationships when a known NPC appears in today's events.
+    for event in events:
+        desc = event.get("description", "")
+        impact = event.get("emotional_impact", {})
+        for rel in relationships:
+            npc_name = rel.get("npc_name", "")
+            if npc_name and npc_name.split()[0] in desc:
+                await _npc_service.update_relationship_from_event(
+                    agent_id=agent["id"],
+                    npc_name=npc_name,
+                    event_description=desc,
+                    emotional_impact=impact,
+                )
+                break  # one update per event
+
     # 8c) Store the memory_to_keep as a reflection memory via the service.
     await _memory_service.store_reflection_memory(
         agent_id=agent["id"],
@@ -217,6 +250,15 @@ async def process_single_agent(agent: dict, state: dict, game_day: int) -> None:
             "memory_to_keep": reflection.get("memory_to_keep"),
             "tomorrow_intention": reflection.get("tomorrow_intention"),
             "emotional_state": new_emotional_state,
+            "relationships": [
+                {
+                    "name": r.get("npc_name", ""),
+                    "relationship_type": r.get("relationship_type", ""),
+                    "strength": r.get("strength", 0),
+                    "summary": (r.get("summary") or "")[:80],
+                }
+                for r in relationships[:5]
+            ],
         },
     }
     ws_payload["payload"]["days_lived"] = game_day - agent.get("starting_game_day", 1)

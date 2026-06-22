@@ -33,6 +33,9 @@ export function useWebSocket(userId) {
               // addEvent applies the whole day transition (events, mood,
               // reflection, day plan, game day) in one update.
               addEvent(message.payload)
+              if (message.payload.relationships) {
+                updateRelationships(message.payload.relationships)
+              }
               break
             case 'event':
               addEvent(message.payload)

@@ -6,15 +6,22 @@ enforced by verifying the Supabase JWT on every request via get_current_user.
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+import anthropic
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from core.config import settings
 from core.database import get_db
+from services.npc_service import NpcService
 
 logger = logging.getLogger(__name__)
 
 # prefix is applied in main.py (include_router(prefix="/agent"))
 router = APIRouter()
+
+
+def _get_anthropic_client():
+    return anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
 
 # --- Request model ---------------------------------------------------------
@@ -66,7 +73,9 @@ def get_current_user(request: Request) -> str:
 # --- Endpoints -------------------------------------------------------------
 @router.post("/create")
 async def create_agent(
-    payload: AgentCreateRequest, user_id: str = Depends(get_current_user)
+    payload: AgentCreateRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(get_current_user),
 ) -> dict:
     """Create the user's agent + default emotional state.
 
@@ -113,6 +122,14 @@ async def create_agent(
                 "loneliness": 40,
             }
         ).execute()
+
+        # Generate NPCs in the background so the response is instant.
+        npc_service = NpcService(_get_anthropic_client())
+        background_tasks.add_task(
+            npc_service.generate_npcs_for_agent,
+            agent_id,
+            payload.model_dump(),
+        )
 
         return {"agent_id": agent_id, "message": "Your Alter is ready"}
     except HTTPException:

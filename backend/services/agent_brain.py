@@ -47,6 +47,17 @@ def _extract_json(text: str):
 
 def _build_system_prompt(agent_profile: dict, emotional_state: dict) -> str:
     """Construct the shared system prompt injecting identity + mood."""
+    relationship_section = ""
+    if agent_profile.get("relationship_context"):
+        name_upper = (agent_profile.get("name") or "THEIR").upper()
+        relationship_section = f"""
+
+PEOPLE IN {name_upper}'S LIFE:
+{agent_profile.get('relationship_context')}
+
+When generating events and plans, naturally include these people
+when contextually appropriate. Use their actual names."""
+
     return f"""
 You are simulating the inner life of an AI person named {agent_profile.get('name')}. You are NOT
 an assistant. You ARE this person. Think, feel, and plan as them.
@@ -74,6 +85,7 @@ CURRENT EMOTIONAL STATE (scale 0-100):
 You must make decisions that feel authentic to this specific person.
 A low-energy day means slower choices. High stress affects judgment.
 High motivation means ambitious plans. Loneliness shapes social behavior.
+{relationship_section}
 """.strip()
 
 
@@ -152,6 +164,12 @@ Respond in JSON only. No explanation outside the JSON.
 {name} planned to: {day_plan.get('daily_intention')}
 Their activities: {', '.join(activities)}
 Their focus today: {day_plan.get('focus_for_day')}
+
+Known people in their life:
+{agent_profile.get('relationship_context', 'None yet')}
+
+When events involve social interactions, prefer using the named people above
+rather than generic "a friend" or "someone".
 
 Generate exactly 3 events that happen to {name} today. Events should feel
 real and personal — connected to their goals, fears, habits, and current

@@ -424,16 +424,49 @@ const ReflectionPanel = memo(function ReflectionPanel({ reflection, dayPlan, rel
       <div>
         <Label>Relationships</Label>
         {relationships && relationships.length > 0 ? (
-          <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
             {relationships.map((rel, i) => (
-              <li key={rel.id || i} style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem' }}>
-                {rel.name || 'Someone'} · {rel.relationship_type}
-              </li>
+              <div key={rel.name || i}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontSize: '0.85rem',
+                  marginBottom: '4px',
+                }}>
+                  <span style={{ color: 'var(--color-text-primary)' }}>{rel.name}</span>
+                  <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
+                    {rel.relationship_type}
+                  </span>
+                </div>
+                <div style={{
+                  height: 4,
+                  borderRadius: 2,
+                  background: 'var(--color-surface-raised)',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    width: `${rel.strength}%`,
+                    height: '100%',
+                    background: 'var(--color-secondary)',
+                    transition: 'width 0.8s ease',
+                  }} />
+                </div>
+                {rel.summary && (
+                  <p style={{
+                    fontSize: '0.75rem',
+                    color: 'var(--color-text-muted)',
+                    marginTop: '4px',
+                    fontStyle: 'italic',
+                  }}>
+                    {rel.summary.slice(0, 80)}{rel.summary.length > 80 ? '…' : ''}
+                  </p>
+                )}
+              </div>
             ))}
-          </ul>
+          </div>
         ) : (
           <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
-            No connections yet.
+            Your Alter is meeting people...
           </p>
         )}
       </div>
