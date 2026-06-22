@@ -12,6 +12,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
+from core.database import get_db
 from core.websocket_manager import manager
 from routers import agent, auth, simulation, world
 from simulation.tick_scheduler import start_scheduler, stop_scheduler
@@ -57,12 +58,32 @@ async def health_check() -> dict:
 
 
 @app.websocket("/ws/{user_id}")
-async def websocket_endpoint(websocket: WebSocket, user_id: str) -> None:
+async def websocket_endpoint(
+    websocket: WebSocket,
+    user_id: str,
+    token: str = None,
+) -> None:
     """Per-user real-time channel.
 
     The client connects once after auth; the simulation loop pushes small
     JSON deltas (events, emotional state, relationships) to this socket.
+    If a token query parameter is present it is verified against Supabase —
+    mismatched or invalid tokens close the socket with code 4001.
     """
+    if token:
+        db = get_db()
+        try:
+            result = db.auth.get_user(token)
+            auth_user = getattr(result, "user", None)
+            auth_user_id = getattr(auth_user, "id", None)
+            if auth_user_id != user_id:
+                await websocket.close(code=4001)
+                return
+        except Exception:  # noqa: BLE001
+            logger.warning("WebSocket token verification failed for user=%s", user_id)
+            await websocket.close(code=4001)
+            return
+
     await manager.connect(websocket, user_id)
     try:
         while True:

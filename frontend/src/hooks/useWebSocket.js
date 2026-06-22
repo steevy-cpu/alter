@@ -19,8 +19,9 @@ export function useWebSocket(userId) {
 
     closedByUnmount.current = false
 
-    const connect = () => {
-      const ws = new WebSocket(buildSocketUrl(userId))
+    const connect = async () => {
+      const url = await buildSocketUrl(userId)
+      const ws = new WebSocket(url)
       socketRef.current = ws
 
       ws.onopen = () => setWsConnected(true)
