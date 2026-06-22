@@ -7,6 +7,7 @@ import { getAgent, getEventFeed, getMemories, getWorldAgents } from '../services
 import AgentAvatar from '../components/AgentAvatar.jsx'
 import WorldMap from '../components/WorldMap.jsx'
 import LifeTimeline from '../components/LifeTimeline.jsx'
+import WorldCanvas from '../components/WorldCanvas.jsx'
 
 const STAT_META = [
   { key: 'energy', label: 'Energy', color: 'var(--color-secondary)' },
@@ -47,6 +48,7 @@ export default function Dashboard() {
   const [memories, setMemories] = useState([])
   const [worldAgents, setWorldAgents] = useState([])
   const [currentLocation, setCurrentLocation] = useState(null)
+  const [hasEncounter, setHasEncounter] = useState(false)
   const isFirstLoad = useRef(true)
 
   useEffect(() => {
@@ -108,6 +110,14 @@ export default function Dashboard() {
   }, [encounterToast])
 
   useEffect(() => {
+    if (encounterToast) {
+      setHasEncounter(true)
+      const t = setTimeout(() => setHasEncounter(false), 5000)
+      return () => clearTimeout(t)
+    }
+  }, [encounterToast])
+
+  useEffect(() => {
     if (!gameDay) return
     if (isFirstLoad.current) {
       isFirstLoad.current = false
@@ -126,10 +136,13 @@ export default function Dashboard() {
         gridTemplateColumns: '300px 1fr 280px',
         gap: 'var(--space-5)',
         padding: 'var(--space-6)',
-        background: 'var(--color-bg)',
+        background: 'transparent',
+        position: 'relative',
+        zIndex: 1,
         alignItems: 'start',
       }}
     >
+      <WorldCanvas emotionalState={emotionalState} hasEncounter={hasEncounter} />
       <style>{KEYFRAMES}</style>
 
       <AgentIdentityPanel

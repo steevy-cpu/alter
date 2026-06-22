@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
+import WorldCanvas from '../components/WorldCanvas.jsx'
 
-// Full-viewport cinematic landing. Minimal by design — enhanced later.
 export default function Landing() {
   const navigate = useNavigate()
 
@@ -15,11 +15,17 @@ export default function Landing() {
         textAlign: 'center',
         padding: 'var(--space-6)',
         position: 'relative',
+        zIndex: 1,
         overflow: 'hidden',
-        background:
-          'radial-gradient(1200px 600px at 50% -10%, rgba(124,111,224,0.18), transparent 60%), radial-gradient(900px 500px at 50% 120%, rgba(78,205,196,0.10), transparent 55%), var(--color-bg)',
+        background: 'transparent',
       }}
     >
+      <WorldCanvas
+        emotionalState={{ energy: 65, loneliness: 30, stress: 20 }}
+        hasEncounter={false}
+      />
+      <div className="vignette" />
+
       <p
         style={{
           textTransform: 'uppercase',
