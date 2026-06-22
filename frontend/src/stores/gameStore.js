@@ -15,6 +15,7 @@ export const useGameStore = create((set) => ({
   currentDayPlan: null,
   gameDay: 0,
   daysLived: 0,
+  encounterToast: null,
 
   // --- Atomic actions ---
   setUser: (user) => set({ user }),
@@ -27,6 +28,7 @@ export const useGameStore = create((set) => ({
   setGameDay: (day) => set({ gameDay: day }),
   setDaysLived: (daysLived) => set({ daysLived }),
   setEventFeed: (eventFeed) => set({ eventFeed }),
+  setEncounterToast: (msg) => set({ encounterToast: msg }),
 
   // addEvent: a single event OR a full "daily_update" payload.
   addEvent: (event) =>

@@ -25,6 +25,7 @@ from core.websocket_manager import manager
 from services.agent_brain import AgentBrain
 from services.memory_service import MemoryService
 from services.npc_service import NpcService
+from services.world_event_engine import WorldEventEngine
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ _anthropic_client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 _brain = AgentBrain(_anthropic_client)
 _memory_service = MemoryService()
 _npc_service = NpcService(_anthropic_client)
+_world_engine = WorldEventEngine(_anthropic_client)
 
 
 def build_narrative_content(day_plan: dict, events: list[dict], reflection: dict) -> str:
@@ -329,3 +331,127 @@ async def run_tick() -> None:
             )
 
     await asyncio.gather(*[_safe_process(agent) for agent in agents])
+
+    # Step 4 — cross-player encounters (runs after all agents complete their day).
+    try:
+        encounters = await _world_engine.check_and_generate_encounters(
+            agents=agents,
+            states=states_by_agent,
+            game_day=game_day,
+        )
+
+        for encounter in encounters:
+            # 4a) Persist two game_event rows — one perspective per agent.
+            try:
+                rows = [
+                    {
+                        "agent_id": encounter["agent_id_a"],
+                        "event_type": "cross_player",
+                        "title": encounter["title"],
+                        "content": encounter["narrative_a"],
+                        "metadata": {
+                            "other_agent_name": encounter["name_b"],
+                            "location": encounter["location"],
+                            "connection_potential": encounter["connection_potential"],
+                            "emotional_impact": encounter["emotional_impact_a"],
+                        },
+                        "game_day": game_day,
+                        "is_public": True,
+                    },
+                    {
+                        "agent_id": encounter["agent_id_b"],
+                        "event_type": "cross_player",
+                        "title": encounter["title"],
+                        "content": encounter["narrative_b"],
+                        "metadata": {
+                            "other_agent_name": encounter["name_a"],
+                            "location": encounter["location"],
+                            "connection_potential": encounter["connection_potential"],
+                            "emotional_impact": encounter["emotional_impact_b"],
+                        },
+                        "game_day": game_day,
+                        "is_public": True,
+                    },
+                ]
+                db.table("game_events").insert(rows).execute()
+            except Exception:  # noqa: BLE001
+                logger.exception("Failed to persist encounter events")
+                continue
+
+            # 4b) Apply emotional impact to both agents' state rows.
+            try:
+                def apply_impact(state: dict, impact: dict) -> dict:
+                    new = dict(state)
+                    for key, val in impact.items():
+                        if key in new:
+                            new[key] = max(0, min(100, int(new.get(key, 50)) + int(val)))
+                    return new
+
+                state_a = states_by_agent.get(encounter["agent_id_a"], {})
+                state_b = states_by_agent.get(encounter["agent_id_b"], {})
+                new_state_a = apply_impact(state_a, encounter["emotional_impact_a"])
+                new_state_b = apply_impact(state_b, encounter["emotional_impact_b"])
+
+                now = datetime.now(timezone.utc).isoformat()
+                db.table("agent_state").update(
+                    {
+                        "energy": new_state_a.get("energy"),
+                        "happiness": new_state_a.get("happiness"),
+                        "loneliness": new_state_a.get("loneliness"),
+                        "last_updated": now,
+                    }
+                ).eq("agent_id", encounter["agent_id_a"]).execute()
+                db.table("agent_state").update(
+                    {
+                        "energy": new_state_b.get("energy"),
+                        "happiness": new_state_b.get("happiness"),
+                        "loneliness": new_state_b.get("loneliness"),
+                        "last_updated": now,
+                    }
+                ).eq("agent_id", encounter["agent_id_b"]).execute()
+            except Exception:  # noqa: BLE001
+                logger.exception("Failed to update emotional state after encounter")
+
+            # 4c) Broadcast each player's own perspective only.
+            try:
+                await manager.send_to_user(
+                    encounter["user_id_a"],
+                    {
+                        "type": "cross_player_encounter",
+                        "payload": {
+                            "game_day": game_day,
+                            "title": encounter["title"],
+                            "location": encounter["location"],
+                            "narrative": encounter["narrative_a"],
+                            "other_person": encounter["name_b"],
+                            "connection_potential": encounter["connection_potential"],
+                            "emotional_impact": encounter["emotional_impact_a"],
+                        },
+                    },
+                )
+                await manager.send_to_user(
+                    encounter["user_id_b"],
+                    {
+                        "type": "cross_player_encounter",
+                        "payload": {
+                            "game_day": game_day,
+                            "title": encounter["title"],
+                            "location": encounter["location"],
+                            "narrative": encounter["narrative_b"],
+                            "other_person": encounter["name_a"],
+                            "connection_potential": encounter["connection_potential"],
+                            "emotional_impact": encounter["emotional_impact_b"],
+                        },
+                    },
+                )
+                logger.info(
+                    "Cross-player encounter broadcast: %s + %s at %s",
+                    encounter["name_a"],
+                    encounter["name_b"],
+                    encounter["location"],
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception("Failed to broadcast encounter")
+
+    except Exception:  # noqa: BLE001
+        logger.exception("Cross-player encounter step failed")

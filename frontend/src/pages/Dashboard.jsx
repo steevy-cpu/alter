@@ -43,6 +43,8 @@ export default function Dashboard() {
   const updateEmotionalState = useGameStore((s) => s.updateEmotionalState)
   const setGameDay = useGameStore((s) => s.setGameDay)
 
+  const encounterToast = useGameStore((s) => s.encounterToast)
+
   const [toast, setToast] = useState(null)
   const isFirstLoad = useRef(true)
 
@@ -87,6 +89,13 @@ export default function Dashboard() {
     }
   }, [navigate, setAgent, setEventFeed, updateEmotionalState, setGameDay])
 
+  // Dismiss encounter toast after 4 seconds.
+  useEffect(() => {
+    if (!encounterToast) return
+    const t = setTimeout(() => useGameStore.getState().setEncounterToast(null), 4000)
+    return () => clearTimeout(t)
+  }, [encounterToast])
+
   // Show a "Day N complete" toast whenever a new day lands via WebSocket.
   // Skip the very first gameDay value (it comes from the initial REST load).
   useEffect(() => {
@@ -130,6 +139,7 @@ export default function Dashboard() {
       />
 
       {toast && <Toast message={toast} />}
+      {encounterToast && <EncounterToast message={encounterToast} />}
     </div>
   )
 }
@@ -304,14 +314,33 @@ const DayBadge = memo(function DayBadge({ day }) {
 })
 
 const EventCard = memo(function EventCard({ event }) {
+  const isCrossPlayer = event.event_type === 'cross_player'
+  const borderColor = isCrossPlayer ? 'var(--color-secondary)' : 'var(--color-primary)'
+
   return (
     <article
       className="card"
       style={{
-        borderLeft: '3px solid var(--color-primary)',
+        borderLeft: `3px solid ${borderColor}`,
         animation: 'slideIn 0.4s ease forwards',
       }}
     >
+      {isCrossPlayer && (
+        <div
+          style={{
+            display: 'inline-block',
+            fontSize: '0.72rem',
+            padding: '2px 8px',
+            borderRadius: 'var(--radius-sm)',
+            background: 'var(--color-secondary)22',
+            color: 'var(--color-secondary)',
+            border: '1px solid var(--color-secondary)44',
+            marginBottom: 'var(--space-2)',
+          }}
+        >
+          ✦ Encounter
+        </div>
+      )}
       <div
         style={{
           display: 'flex',
@@ -321,6 +350,7 @@ const EventCard = memo(function EventCard({ event }) {
         }}
       >
         {event.time_of_day && <Tag>{event.time_of_day}</Tag>}
+        {event.location && isCrossPlayer && <Tag>{event.location}</Tag>}
       </div>
       <h4 style={{ marginBottom: 'var(--space-2)' }}>{event.title}</h4>
       <p style={{ color: 'var(--color-text-secondary)' }}>{event.description}</p>
@@ -491,7 +521,31 @@ const Label = memo(function Label({ children }) {
   )
 })
 
-// --- Toast -----------------------------------------------------------------
+// --- Toasts ----------------------------------------------------------------
+const EncounterToast = memo(function EncounterToast({ message }) {
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        bottom: 'var(--space-6)',
+        left: 'var(--space-6)',
+        padding: 'var(--space-3) var(--space-5)',
+        background: 'var(--color-surface-raised)',
+        border: '1px solid var(--color-secondary)',
+        borderRadius: 'var(--radius-md)',
+        color: 'var(--color-text-primary)',
+        boxShadow: '0 8px 30px rgba(78, 205, 196, 0.2)',
+        animation: 'toastIn 0.3s ease forwards',
+        zIndex: 50,
+        maxWidth: 300,
+        fontSize: '0.9rem',
+      }}
+    >
+      ✦ {message}
+    </div>
+  )
+})
+
 const Toast = memo(function Toast({ message }) {
   return (
     <div

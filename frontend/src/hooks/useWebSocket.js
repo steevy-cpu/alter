@@ -13,6 +13,7 @@ export function useWebSocket(userId) {
   const addEvent = useGameStore((s) => s.addEvent)
   const updateEmotionalState = useGameStore((s) => s.updateEmotionalState)
   const updateRelationships = useGameStore((s) => s.updateRelationships)
+  const setEncounterToast = useGameStore((s) => s.setEncounterToast)
 
   useEffect(() => {
     if (!userId) return
@@ -47,6 +48,21 @@ export function useWebSocket(userId) {
             case 'relationships':
               updateRelationships(message.payload)
               break
+            case 'cross_player_encounter':
+              addEvent({
+                title: message.payload.title,
+                description: message.payload.narrative,
+                event_type: 'cross_player',
+                game_day: message.payload.game_day,
+                time_of_day: null,
+                location: message.payload.location,
+                other_person: message.payload.other_person,
+                connection_potential: message.payload.connection_potential,
+              })
+              setEncounterToast(
+                `${message.payload.other_person} just crossed paths with your Alter`
+              )
+              break
             default:
               console.log('Unhandled WS message', message)
           }
@@ -76,7 +92,7 @@ export function useWebSocket(userId) {
       if (socketRef.current) socketRef.current.close()
       setWsConnected(false)
     }
-  }, [userId, setWsConnected, addEvent, updateEmotionalState, updateRelationships])
+  }, [userId, setWsConnected, addEvent, updateEmotionalState, updateRelationships, setEncounterToast])
 
   return socketRef
 }
