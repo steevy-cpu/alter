@@ -29,7 +29,7 @@ const WorldCanvas = memo(function WorldCanvas({ emotionalState, hasEncounter }) 
       renderer.setClearColor(0x000000, 0)
 
       scene = new THREE.Scene()
-      scene.fog = new THREE.FogExp2(0x0a0a0f, 0.035)
+      scene.fog = new THREE.FogExp2(0x0a0a0f, 0.02)
 
       camera = new THREE.PerspectiveCamera(
         60,
@@ -37,7 +37,7 @@ const WorldCanvas = memo(function WorldCanvas({ emotionalState, hasEncounter }) 
         0.1,
         1000
       )
-      camera.position.set(0, 8, 40)
+      camera.position.set(0, 6, 25)
       camera.lookAt(0, 4, 0)
 
       // Miami skyline silhouette
@@ -60,7 +60,7 @@ const WorldCanvas = memo(function WorldCanvas({ emotionalState, hasEncounter }) 
         const mat = new THREE.MeshBasicMaterial({
           color: 0x0d0d18,
           transparent: true,
-          opacity: 0.9,
+          opacity: 1.0,
         })
         const mesh = new THREE.Mesh(geo, mat)
         mesh.position.set(b.x, b.h / 2 - 10, -20)
@@ -91,11 +91,11 @@ const WorldCanvas = memo(function WorldCanvas({ emotionalState, hasEncounter }) 
       const gridHelper = new THREE.GridHelper(100, 30, 0x1a1a2e, 0x1a1a2e)
       gridHelper.position.y = -10
       gridHelper.material.transparent = true
-      gridHelper.material.opacity = 0.4
+      gridHelper.material.opacity = 0.6
       scene.add(gridHelper)
 
       // Particle system
-      const PARTICLE_COUNT = 800
+      const PARTICLE_COUNT = 1200
       const pGeo = new THREE.BufferGeometry()
       particlePositions = new Float32Array(PARTICLE_COUNT * 3)
       particleVelocities = []
@@ -105,9 +105,9 @@ const WorldCanvas = memo(function WorldCanvas({ emotionalState, hasEncounter }) 
         particlePositions[i * 3 + 1] = (Math.random() - 0.5) * 60
         particlePositions[i * 3 + 2] = (Math.random() - 0.5) * 60
         particleVelocities.push({
-          x: (Math.random() - 0.5) * 0.02,
-          y: (Math.random() - 0.5) * 0.01,
-          z: (Math.random() - 0.5) * 0.02,
+          x: (Math.random() - 0.5) * 0.03,
+          y: (Math.random() - 0.5) * 0.015,
+          z: (Math.random() - 0.5) * 0.03,
         })
       }
 
@@ -115,9 +115,9 @@ const WorldCanvas = memo(function WorldCanvas({ emotionalState, hasEncounter }) 
 
       const pMat = new THREE.PointsMaterial({
         color: 0x7c6fe0,
-        size: 0.25,
+        size: 0.4,
         transparent: true,
-        opacity: 0.6,
+        opacity: 0.8,
         sizeAttenuation: true,
       })
 
