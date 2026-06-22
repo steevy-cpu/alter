@@ -51,6 +51,34 @@ async def get_event_feed(
         raise HTTPException(status_code=500, detail="get_event_feed failed") from exc
 
 
+@router.get("/memories")
+async def get_memories(
+    limit: int = 20, user_id: str = Depends(get_current_user)
+) -> list[dict]:
+    """Return the most recent agent memories for the current user's agent."""
+    db = get_db()
+    try:
+        agent_res = (
+            db.table("agents").select("id").eq("user_id", user_id).limit(1).execute()
+        )
+        if not agent_res.data:
+            return []
+        agent_id = agent_res.data[0]["id"]
+
+        mem_res = (
+            db.table("agent_memories")
+            .select("id, content, memory_type, game_day, emotional_weight, created_at")
+            .eq("agent_id", agent_id)
+            .order("game_day", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return mem_res.data or []
+    except Exception:  # noqa: BLE001
+        logger.exception("get_memories failed for user=%s", user_id)
+        return []
+
+
 @router.get("/day-summary/{game_day}")
 async def get_day_summary(
     game_day: int, user_id: str = Depends(get_current_user)

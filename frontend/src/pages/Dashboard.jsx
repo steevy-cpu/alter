@@ -1,12 +1,13 @@
-import { useEffect, useState, useCallback, useRef, memo } from 'react'
+import { useEffect, useState, useRef, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth.js'
 import { useWebSocket } from '../hooks/useWebSocket.js'
 import { useGameStore } from '../stores/gameStore.js'
-import { getAgent, getEventFeed } from '../services/api.js'
+import { getAgent, getEventFeed, getMemories, getWorldAgents } from '../services/api.js'
+import AgentAvatar from '../components/AgentAvatar.jsx'
+import WorldMap from '../components/WorldMap.jsx'
+import LifeTimeline from '../components/LifeTimeline.jsx'
 
-// Stat → color mapping. Two stats use inline hex per the design spec
-// (amber + muted purple); the rest use CSS custom properties.
 const STAT_META = [
   { key: 'energy', label: 'Energy', color: 'var(--color-secondary)' },
   { key: 'happiness', label: 'Happiness', color: '#F9CB42' },
@@ -24,7 +25,6 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const { user } = useAuth()
 
-  // Live updates flow into the store via this hook.
   useWebSocket(user?.id)
 
   const agent = useGameStore((s) => s.agent)
@@ -35,20 +35,20 @@ export default function Dashboard() {
   const currentReflection = useGameStore((s) => s.currentReflection)
   const currentDayPlan = useGameStore((s) => s.currentDayPlan)
   const gameDay = useGameStore((s) => s.gameDay)
-  // Proxy for now — a later prompt will use days_lived from the WS payload.
   const daysLived = useGameStore((s) => s.gameDay)
+  const encounterToast = useGameStore((s) => s.encounterToast)
 
   const setAgent = useGameStore((s) => s.setAgent)
   const setEventFeed = useGameStore((s) => s.setEventFeed)
   const updateEmotionalState = useGameStore((s) => s.updateEmotionalState)
   const setGameDay = useGameStore((s) => s.setGameDay)
 
-  const encounterToast = useGameStore((s) => s.encounterToast)
-
   const [toast, setToast] = useState(null)
+  const [memories, setMemories] = useState([])
+  const [worldAgents, setWorldAgents] = useState([])
+  const [currentLocation, setCurrentLocation] = useState(null)
   const isFirstLoad = useRef(true)
 
-  // Initial load: agent + past feed. Redirect to onboarding if no agent.
   useEffect(() => {
     let active = true
     ;(async () => {
@@ -68,7 +68,6 @@ export default function Dashboard() {
 
         const feed = await getEventFeed()
         if (!active) return
-        // Normalize game_events rows into the feed shape the UI renders.
         const normalized = (feed || []).map((row) => ({
           id: row.id,
           title: row.title,
@@ -80,6 +79,11 @@ export default function Dashboard() {
         setEventFeed(normalized)
         const latestDay = normalized.reduce((m, e) => Math.max(m, e.game_day || 0), 0)
         if (latestDay) setGameDay(latestDay)
+
+        const [mems, wa] = await Promise.all([getMemories(20), getWorldAgents()])
+        if (!active) return
+        setMemories(mems)
+        setWorldAgents(wa)
       } catch (err) {
         console.error('Dashboard load failed', err)
       }
@@ -89,15 +93,20 @@ export default function Dashboard() {
     }
   }, [navigate, setAgent, setEventFeed, updateEmotionalState, setGameDay])
 
-  // Dismiss encounter toast after 4 seconds.
+  // Pick location hint from newest event in feed when day advances.
+  useEffect(() => {
+    if (eventFeed && eventFeed.length > 0) {
+      const newest = eventFeed[0]
+      if (newest?.location) setCurrentLocation(newest.location)
+    }
+  }, [eventFeed])
+
   useEffect(() => {
     if (!encounterToast) return
     const t = setTimeout(() => useGameStore.getState().setEncounterToast(null), 4000)
     return () => clearTimeout(t)
   }, [encounterToast])
 
-  // Show a "Day N complete" toast whenever a new day lands via WebSocket.
-  // Skip the very first gameDay value (it comes from the initial REST load).
   useEffect(() => {
     if (!gameDay) return
     if (isFirstLoad.current) {
@@ -114,7 +123,7 @@ export default function Dashboard() {
       style={{
         minHeight: '100vh',
         display: 'grid',
-        gridTemplateColumns: '280px 1fr 260px',
+        gridTemplateColumns: '300px 1fr 280px',
         gap: 'var(--space-5)',
         padding: 'var(--space-6)',
         background: 'var(--color-bg)',
@@ -123,19 +132,22 @@ export default function Dashboard() {
     >
       <style>{KEYFRAMES}</style>
 
-      <EmotionalStatePanel
+      <AgentIdentityPanel
         agent={agent}
         emotionalState={emotionalState}
         wsConnected={wsConnected}
         daysLived={daysLived}
+        worldAgents={worldAgents}
+        currentLocation={currentLocation}
       />
 
       <EventFeed events={eventFeed} gameDay={gameDay} />
 
-      <ReflectionPanel
+      <RightPanel
         reflection={currentReflection}
         dayPlan={currentDayPlan}
         relationships={relationships}
+        memories={memories}
       />
 
       {toast && <Toast message={toast} />}
@@ -144,28 +156,53 @@ export default function Dashboard() {
   )
 }
 
-// --- Left panel: emotional state + identity --------------------------------
-const EmotionalStatePanel = memo(function EmotionalStatePanel({
+// --- Left panel: avatar + identity + stats + map ---------------------------
+const AgentIdentityPanel = memo(function AgentIdentityPanel({
   agent,
   emotionalState,
   wsConnected,
   daysLived,
+  worldAgents,
+  currentLocation,
 }) {
   return (
     <aside className="card" style={{ position: 'sticky', top: 'var(--space-6)' }}>
-      <h3 style={{ marginBottom: 'var(--space-1)' }}>{agent?.name || 'Your Alter'}</h3>
-      <p
-        style={{
-          color: 'var(--color-text-secondary)',
-          fontSize: '0.85rem',
-          marginBottom: 'var(--space-5)',
-        }}
-      >
-        {agent?.occupation || 'waking up…'}
-        {agent?.city ? ` · ${agent.city}` : ''}
-      </p>
+      {/* Identity */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
+        <AgentAvatar name={agent?.name} size={80} showRing glowColor="primary" />
+        <div style={{ minWidth: 0 }}>
+          <h3
+            style={{
+              marginBottom: 2,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              transition: 'text-shadow var(--transition)',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.textShadow = 'var(--glow-primary)')}
+            onMouseLeave={(e) => (e.currentTarget.style.textShadow = 'none')}
+          >
+            {agent?.name || 'Your Alter'}
+          </h3>
+          <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.82rem', marginBottom: 2 }}>
+            {agent?.occupation || 'waking up…'}
+          </p>
+          {agent?.city && (
+            <p style={{ color: 'var(--color-text-muted)', fontSize: '0.78rem' }}>
+              {agent.city}
+            </p>
+          )}
+          {daysLived > 0 && (
+            <p style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
+              Day {daysLived} of their life
+            </p>
+          )}
+        </div>
+      </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      {/* Emotional state */}
+      <Label>State</Label>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', marginBottom: 'var(--space-5)' }}>
         {STAT_META.map((stat) => {
           const value = emotionalState?.[stat.key] ?? 0
           return (
@@ -174,7 +211,7 @@ const EmotionalStatePanel = memo(function EmotionalStatePanel({
                 style={{
                   display: 'flex',
                   justifyContent: 'space-between',
-                  fontSize: '0.85rem',
+                  fontSize: '0.82rem',
                   color: 'var(--color-text-secondary)',
                   marginBottom: 'var(--space-1)',
                 }}
@@ -204,13 +241,19 @@ const EmotionalStatePanel = memo(function EmotionalStatePanel({
         })}
       </div>
 
+      {/* World map */}
+      <Label>World</Label>
+      <div style={{ marginBottom: 'var(--space-4)' }}>
+        <WorldMap agents={worldAgents} currentLocation={currentLocation} />
+      </div>
+
+      {/* Connection status */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: 'var(--space-2)',
-          marginTop: 'var(--space-6)',
-          fontSize: '0.85rem',
+          fontSize: '0.82rem',
           color: 'var(--color-text-secondary)',
         }}
       >
@@ -221,22 +264,11 @@ const EmotionalStatePanel = memo(function EmotionalStatePanel({
             borderRadius: '50%',
             background: wsConnected ? 'var(--color-success)' : 'var(--color-text-muted)',
             boxShadow: wsConnected ? '0 0 10px var(--color-success)' : 'none',
+            flexShrink: 0,
           }}
         />
         {wsConnected ? 'Live' : 'Connecting...'}
       </div>
-
-      {daysLived > 0 && (
-        <p
-          style={{
-            fontSize: '0.78rem',
-            color: 'var(--color-text-muted)',
-            marginTop: 'var(--space-2)',
-          }}
-        >
-          Day {daysLived} of their life
-        </p>
-      )}
     </aside>
   )
 })
@@ -264,7 +296,6 @@ const EventFeed = memo(function EventFeed({ events, gameDay }) {
     )
   }
 
-  // Render the feed, inserting a "Day N" badge whenever the day changes.
   let lastDay = null
   return (
     <section
@@ -382,8 +413,10 @@ const Tag = memo(function Tag({ children, muted }) {
   )
 })
 
-// --- Right panel: reflection + tomorrow + relationships --------------------
-const ReflectionPanel = memo(function ReflectionPanel({ reflection, dayPlan, relationships }) {
+// --- Right panel: tabbed sections ------------------------------------------
+const RightPanel = memo(function RightPanel({ reflection, dayPlan, relationships, memories }) {
+  const [activeSection, setActiveSection] = useState('life')
+
   return (
     <aside
       className="card"
@@ -392,114 +425,141 @@ const ReflectionPanel = memo(function ReflectionPanel({ reflection, dayPlan, rel
         top: 'var(--space-6)',
         display: 'flex',
         flexDirection: 'column',
-        gap: 'var(--space-5)',
+        gap: 'var(--space-4)',
+        maxHeight: 'calc(100vh - 96px)',
+        overflowY: 'auto',
       }}
     >
-      {dayPlan?.inner_thought && (
-        <div>
-          <Label>Inner thought</Label>
-          <p
-            style={{
-              fontStyle: 'italic',
-              color: 'var(--color-text-muted)',
-              fontSize: '0.9rem',
-            }}
-          >
-            “{dayPlan.inner_thought}”
-          </p>
-        </div>
-      )}
-
-      {reflection ? (
-        <>
-          <div>
-            <Label>Today's reflection</Label>
-            <p style={{ fontStyle: 'italic', color: 'var(--color-text-primary)' }}>
-              {reflection.reflection}
-            </p>
-          </div>
-
-          {reflection.lesson && (
-            <p style={{ color: 'var(--color-secondary)', fontSize: '0.9rem' }}>
-              ✦ {reflection.lesson}
-            </p>
-          )}
-
-          {reflection.memory_to_keep && (
-            <p
+      {/* Section tabs */}
+      <div style={{ display: 'flex', gap: 'var(--space-4)', borderBottom: '1px solid var(--color-border)', paddingBottom: 'var(--space-3)' }}>
+        {[
+          { id: 'life', label: 'Inner Life' },
+          { id: 'relationships', label: 'People' },
+          { id: 'memories', label: 'Life Moments' },
+        ].map((tab) => {
+          const isActive = activeSection === tab.id
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveSection(tab.id)}
               style={{
-                color: 'var(--color-text-muted)',
-                fontSize: '0.82rem',
+                fontSize: '0.72rem',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                borderBottom: isActive ? '1px solid var(--color-primary)' : 'none',
+                paddingBottom: 4,
+                cursor: 'pointer',
+                transition: 'color var(--transition)',
+                background: 'none',
+                border: 'none',
+                borderBottom: isActive ? '1px solid var(--color-primary)' : '1px solid transparent',
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) e.currentTarget.style.color = 'var(--color-text-secondary)'
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) e.currentTarget.style.color = 'var(--color-text-muted)'
               }}
             >
-              {reflection.memory_to_keep}
-            </p>
-          )}
+              {tab.label}
+            </button>
+          )
+        })}
+      </div>
 
-          {reflection.tomorrow_intention && (
+      {/* Inner Life section */}
+      {activeSection === 'life' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          {dayPlan?.inner_thought && (
             <div>
-              <Label>Tomorrow</Label>
-              <p style={{ color: 'var(--color-text-secondary)' }}>
-                {reflection.tomorrow_intention}
+              <Label>Inner thought</Label>
+              <p style={{ fontStyle: 'italic', color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
+                "{dayPlan.inner_thought}"
               </p>
             </div>
           )}
-        </>
-      ) : (
-        <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
-          Reflections will appear here as your Alter lives each day.
-        </p>
+
+          {reflection ? (
+            <>
+              <div>
+                <Label>Today's reflection</Label>
+                <p style={{ fontStyle: 'italic', color: 'var(--color-text-primary)' }}>
+                  {reflection.reflection}
+                </p>
+              </div>
+              {reflection.lesson && (
+                <p style={{ color: 'var(--color-secondary)', fontSize: '0.9rem' }}>
+                  ✦ {reflection.lesson}
+                </p>
+              )}
+              {reflection.memory_to_keep && (
+                <p style={{ color: 'var(--color-text-muted)', fontSize: '0.82rem' }}>
+                  {reflection.memory_to_keep}
+                </p>
+              )}
+              {reflection.tomorrow_intention && (
+                <div>
+                  <Label>Tomorrow</Label>
+                  <p style={{ color: 'var(--color-text-secondary)' }}>
+                    {reflection.tomorrow_intention}
+                  </p>
+                </div>
+              )}
+            </>
+          ) : (
+            <p style={{ color: 'var(--color-text-muted)', fontSize: '0.9rem' }}>
+              Reflections will appear here as your Alter lives each day.
+            </p>
+          )}
+        </div>
       )}
 
-      <div>
-        <Label>Relationships</Label>
-        {relationships && relationships.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-            {relationships.map((rel, i) => (
-              <div key={rel.name || i}>
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: '0.85rem',
-                  marginBottom: '4px',
-                }}>
-                  <span style={{ color: 'var(--color-text-primary)' }}>{rel.name}</span>
-                  <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
-                    {rel.relationship_type}
-                  </span>
+      {/* Relationships section */}
+      {activeSection === 'relationships' && (
+        <div>
+          {relationships && relationships.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+              {relationships.map((rel, i) => (
+                <div key={rel.name || i}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', marginBottom: 4 }}>
+                    <AgentAvatar name={rel.name} size={28} showRing={false} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                        <span style={{ color: 'var(--color-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {rel.name}
+                        </span>
+                        <span style={{ color: 'var(--color-text-muted)', fontSize: '0.72rem', flexShrink: 0, marginLeft: 'var(--space-2)' }}>
+                          {rel.relationship_type}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ height: 4, borderRadius: 2, background: 'var(--color-surface-raised)', overflow: 'hidden' }}>
+                    <div style={{ width: `${rel.strength}%`, height: '100%', background: 'var(--color-secondary)', transition: 'width 0.8s ease' }} />
+                  </div>
+                  {rel.summary && (
+                    <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 4, fontStyle: 'italic' }}>
+                      {rel.summary.slice(0, 80)}{rel.summary.length > 80 ? '…' : ''}
+                    </p>
+                  )}
                 </div>
-                <div style={{
-                  height: 4,
-                  borderRadius: 2,
-                  background: 'var(--color-surface-raised)',
-                  overflow: 'hidden',
-                }}>
-                  <div style={{
-                    width: `${rel.strength}%`,
-                    height: '100%',
-                    background: 'var(--color-secondary)',
-                    transition: 'width 0.8s ease',
-                  }} />
-                </div>
-                {rel.summary && (
-                  <p style={{
-                    fontSize: '0.75rem',
-                    color: 'var(--color-text-muted)',
-                    marginTop: '4px',
-                    fontStyle: 'italic',
-                  }}>
-                    {rel.summary.slice(0, 80)}{rel.summary.length > 80 ? '…' : ''}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
-            Your Alter is meeting people...
-          </p>
-        )}
-      </div>
+              ))}
+            </div>
+          ) : (
+            <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
+              Your Alter is meeting people...
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Memories section */}
+      {activeSection === 'memories' && (
+        <div>
+          <LifeTimeline memories={memories} />
+        </div>
+      )}
     </aside>
   )
 })

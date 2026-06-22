@@ -39,6 +39,25 @@ async def get_world_status() -> dict:
         return {"current_game_day": 1, "active_agents": 0, "last_tick": None}
 
 
+@router.get("/agents")
+async def get_world_agents() -> list:
+    """Return public identity fields for all active agents (max 20)."""
+    try:
+        db = get_db()
+        res = (
+            db.table("agents")
+            .select("id, name, occupation, city")
+            .eq("is_active", True)
+            .order("created_at", desc=False)
+            .limit(20)
+            .execute()
+        )
+        return res.data or []
+    except Exception:  # noqa: BLE001
+        logger.exception("get_world_agents failed")
+        return []
+
+
 @router.get("/relationships/{agent_id}")
 async def get_agent_relationships(agent_id: str) -> list:
     """Return public relationships for an agent, ordered by strength DESC."""

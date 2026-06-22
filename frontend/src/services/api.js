@@ -86,4 +86,22 @@ export async function getWorldStatus() {
   }
 }
 
+export async function getMemories(limit = 20) {
+  try {
+    const res = await api.get(`/simulation/memories?limit=${limit}`)
+    return res.data || []
+  } catch {
+    return []
+  }
+}
+
+export async function getWorldAgents() {
+  try {
+    const res = await api.get('/world/agents')
+    return res.data || []
+  } catch {
+    return []
+  }
+}
+
 export default api
