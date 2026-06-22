@@ -8,6 +8,7 @@ import AgentAvatar from '../components/AgentAvatar.jsx'
 import WorldMap from '../components/WorldMap.jsx'
 import LifeTimeline from '../components/LifeTimeline.jsx'
 import WorldCanvas from '../components/WorldCanvas.jsx'
+import AgentViewer from '../components/AgentViewer.jsx'
 
 const STAT_META = [
   { key: 'energy', label: 'Energy', color: 'var(--color-secondary)' },
@@ -180,6 +181,9 @@ const AgentIdentityPanel = memo(function AgentIdentityPanel({
 }) {
   return (
     <aside className="card" style={{ position: 'sticky', top: 'var(--space-6)' }}>
+      {/* 3D Character Viewer */}
+      <AgentViewer emotionalState={emotionalState} />
+
       {/* Identity */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
         <AgentAvatar name={agent?.name} size={80} showRing glowColor="primary" />
