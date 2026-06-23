@@ -22,8 +22,8 @@ const IsometricWorld = memo(function IsometricWorld({
 
         const config = {
           type: Phaser.AUTO,
-          width: 800,
-          height: 600,
+          width: 900,
+          height: 700,
           transparent: true,
           parent: containerRef.current,
           scene: RoomScene,

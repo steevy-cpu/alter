@@ -9,7 +9,7 @@ export class RoomScene extends Phaser.Scene {
     this.currentLocation = 'center'
     this.locationLabel = null
     this.tokenRing = null
-    this.tokenMask = null
+    this.tokenBg = null
   }
 
   init(data) {
@@ -50,33 +50,32 @@ export class RoomScene extends Phaser.Scene {
       wallR.setDepth(-1)
     }
 
-    // Agent token
+    // Create the agent token
     const center = gridToScreen(LOCATIONS.center.col, LOCATIONS.center.row)
-    const tokenX = center.x
     const tokenY = center.y - 20
 
+    // Background circle — always renders, gives the token a solid base
+    this.tokenBg = this.add.circle(center.x, tokenY, 26, 0x1a1a26)
+    this.tokenBg.setStrokeStyle(3, 0x7c6fe0)
+    this.tokenBg.setDepth(999)
+
+    // Avatar image on top, sized to fit inside the circle
     if (this.textures.exists('avatar')) {
-      this.agentToken = this.add.image(tokenX, tokenY, 'avatar')
-      this.agentToken.setDisplaySize(48, 48)
-      this.agentToken.setOrigin(0.5, 0.5)
-
-      this.tokenMask = this.make.graphics({ add: false })
-      this.tokenMask.fillStyle(0xffffff)
-      this.tokenMask.fillCircle(tokenX, tokenY, 24)
-      this.agentToken.setMask(this.tokenMask.createGeometryMask())
+      this.agentToken = this.add.image(center.x, tokenY, 'avatar')
+      this.agentToken.setDisplaySize(44, 44)
+      this.agentToken.setDepth(1000)
     } else {
-      this.agentToken = this.add.circle(tokenX, tokenY, 24, 0x7c6fe0)
-      this.agentToken.setStrokeStyle(3, 0x4ecdc4)
+      this.agentToken = this.add.circle(center.x, tokenY, 22, 0x7c6fe0)
+      this.agentToken.setDepth(1000)
     }
-    this.agentToken.setDepth(1000)
 
-    // Teal ring around token
-    this.tokenRing = this.add.circle(tokenX, tokenY, 28)
-    this.tokenRing.setStrokeStyle(2, 0x4ecdc4, 0.8)
-    this.tokenRing.setDepth(999)
+    // Teal glow ring
+    this.tokenRing = this.add.circle(center.x, tokenY, 30)
+    this.tokenRing.setStrokeStyle(2, 0x4ecdc4, 0.9)
+    this.tokenRing.setDepth(1001)
 
     // Location label
-    this.locationLabel = this.add.text(tokenX, tokenY - 44, 'Home', {
+    this.locationLabel = this.add.text(center.x, tokenY - 44, 'Home', {
       fontFamily: 'system-ui, sans-serif',
       fontSize: '13px',
       color: '#f0eff8',
@@ -84,11 +83,11 @@ export class RoomScene extends Phaser.Scene {
       padding: { x: 8, y: 4 },
     })
     this.locationLabel.setOrigin(0.5, 0.5)
-    this.locationLabel.setDepth(1001)
+    this.locationLabel.setDepth(1002)
 
     // Floating idle animation
     this.tweens.add({
-      targets: [this.agentToken, this.tokenRing],
+      targets: [this.agentToken, this.tokenRing, this.tokenBg],
       y: `-=6`,
       duration: 1500,
       yoyo: true,
@@ -106,10 +105,10 @@ export class RoomScene extends Phaser.Scene {
     const targetY = y - 20
 
     // Stop the floating tween before moving
-    this.tweens.killTweensOf([this.agentToken, this.tokenRing])
+    this.tweens.killTweensOf([this.agentToken, this.tokenRing, this.tokenBg])
 
     this.tweens.add({
-      targets: [this.agentToken, this.tokenRing],
+      targets: [this.agentToken, this.tokenRing, this.tokenBg],
       x,
       y: targetY,
       duration: 1200,
@@ -117,19 +116,13 @@ export class RoomScene extends Phaser.Scene {
       onComplete: () => {
         // Resume floating after arriving
         this.tweens.add({
-          targets: [this.agentToken, this.tokenRing],
+          targets: [this.agentToken, this.tokenRing, this.tokenBg],
           y: `-=6`,
           duration: 1500,
           yoyo: true,
           repeat: -1,
           ease: 'Sine.easeInOut',
         })
-        // Update geometry mask position
-        if (this.tokenMask) {
-          this.tokenMask.clear()
-          this.tokenMask.fillStyle(0xffffff)
-          this.tokenMask.fillCircle(this.agentToken.x, this.agentToken.y, 24)
-        }
       },
     })
 

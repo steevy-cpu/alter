@@ -1,11 +1,11 @@
 export const ISO = {
   tileWidth: 99,
-  tileHeight: 85,
+  tileHeight: 54,
   stepX: 49.5,
-  stepY: 42.5,
+  stepY: 27,
   gridSize: 6,
   originX: 400,
-  originY: 120,
+  originY: 200,
 }
 
 export function gridToScreen(col, row) {
