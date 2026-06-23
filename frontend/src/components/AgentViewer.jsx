@@ -63,16 +63,11 @@ function Character({ emotionalState }) {
 
   return (
     <>
-      {/* Test sphere — always visible if Canvas is working */}
-      <mesh position={[0, 0, 0]}>
-        <sphereGeometry args={[0.3, 16, 16]} />
-        <meshBasicMaterial color="#7c6fe0" />
-      </mesh>
       <group ref={group} dispose={null}>
         <primitive
           object={scene}
-          scale={0.018}
-          position={[0, -1.2, 0]}
+          scale={1.5}
+          position={[0, -2.5, 0]}
           rotation={[0, 0, 0]}
         />
       </group>
@@ -139,7 +134,7 @@ const AgentViewer = memo(function AgentViewer({ emotionalState }) {
         }}
       >
         <Canvas
-          camera={{ position: [0, 0.5, 3], fov: 45 }}
+          camera={{ position: [0, 1.5, 4], fov: 50 }}
           gl={{ antialias: false, alpha: true }}
           dpr={Math.min(window.devicePixelRatio, 1.5)}
         >
