@@ -179,6 +179,7 @@ const AgentIdentityPanel = memo(function AgentIdentityPanel({
   worldAgents,
   currentLocation,
 }) {
+  const navigate = useNavigate()
   return (
     <aside className="card" style={{ position: 'sticky', top: 'var(--space-6)' }}>
       {/* 3D Character Viewer */}
@@ -286,6 +287,18 @@ const AgentIdentityPanel = memo(function AgentIdentityPanel({
         />
         {wsConnected ? 'Live' : 'Connecting...'}
       </div>
+
+      <button
+        className="btn-ghost"
+        onClick={() => navigate('/world')}
+        style={{
+          marginTop: 'var(--space-4)',
+          width: '100%',
+          fontSize: '0.85rem',
+        }}
+      >
+        Enter world view
+      </button>
     </aside>
   )
 })
