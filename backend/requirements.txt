@@ -2,7 +2,7 @@ fastapi
 uvicorn[standard]
 python-dotenv
 supabase
-anthropic
+anthropic>=0.39
 apscheduler
 websockets
 pydantic[email]

@@ -15,6 +15,7 @@ from core.config import settings
 from core.database import get_db
 from core.websocket_manager import manager
 from routers import agent, auth, simulation, world
+from sim_router import router as world_sim_router
 from simulation.tick_scheduler import start_scheduler, stop_scheduler
 
 logging.basicConfig(level=logging.INFO)
@@ -49,6 +50,9 @@ app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(agent.router, prefix="/agent", tags=["agent"])
 app.include_router(simulation.router, prefix="/simulation", tags=["simulation"])
 app.include_router(world.router, prefix="/world", tags=["world"])
+# 3D world sim (Steeve test flow): /api/world/locations, /api/world/steeve, /ws/world.
+# Routes carry their own absolute paths, so no prefix here.
+app.include_router(world_sim_router, tags=["world3d"])
 
 
 @app.get("/")
