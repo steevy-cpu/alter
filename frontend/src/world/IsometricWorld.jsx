@@ -22,18 +22,14 @@ const IsometricWorld = memo(function IsometricWorld({
 
         const config = {
           type: Phaser.AUTO,
-          width: 900,
-          height: 700,
+          width: 1600,
+          height: 1600,
           transparent: true,
           parent: containerRef.current,
           scene: RoomScene,
           scale: {
             mode: Phaser.Scale.FIT,
             autoCenter: Phaser.Scale.CENTER_BOTH,
-          },
-          render: {
-            antialias: true,
-            pixelArt: false,
           },
         }
 

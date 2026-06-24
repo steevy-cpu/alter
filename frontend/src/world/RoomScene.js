@@ -1,95 +1,74 @@
 import Phaser from 'phaser'
-import { ISO, gridToScreen, LOCATIONS } from './isoConfig.js'
+import { ROOM, LOCATIONS } from './isoConfig.js'
 
 export class RoomScene extends Phaser.Scene {
   constructor() {
     super({ key: 'RoomScene' })
     this.agentToken = null
-    this.agentName = null
-    this.currentLocation = 'center'
-    this.locationLabel = null
-    this.tokenRing = null
     this.tokenBg = null
+    this.tokenRing = null
+    this.locationLabel = null
+    this.currentLocation = 'center'
   }
 
   init(data) {
-    this.agentName = data.agentName || 'Alter'
+    this.agentName = data.agentName || 'Steeve'
     this.avatarUrl = data.avatarUrl || null
   }
 
   preload() {
-    this.load.image('floor', '/tiles/floor.png')
-    this.load.image('wall_left', '/tiles/wall_left.png')
-    this.load.image('wall_right', '/tiles/wall_right.png')
+    this.load.image('room', ROOM.imageUrl)
     if (this.avatarUrl) {
       this.load.image('avatar', this.avatarUrl)
     }
   }
 
   create() {
-    // Floor grid — back to front for correct isometric overlap
-    for (let row = 0; row < ISO.gridSize; row++) {
-      for (let col = 0; col < ISO.gridSize; col++) {
-        const { x, y } = gridToScreen(col, row)
-        const floor = this.add.image(x, y, 'floor')
-        floor.setOrigin(0.5, 0.5)
-        floor.setDepth(col + row)
-      }
-    }
+    // Place the room image covering the full scene
+    this.room = this.add.image(0, 0, 'room')
+    this.room.setOrigin(0, 0)
+    this.room.setDisplaySize(ROOM.imageWidth, ROOM.imageHeight)
+    this.room.setDepth(0)
 
-    // Back walls along row=-1 (left wall) and col=-1 (right wall)
-    for (let i = 0; i < ISO.gridSize; i++) {
-      const posL = gridToScreen(i, -1)
-      const wallL = this.add.image(posL.x, posL.y, 'wall_left')
-      wallL.setOrigin(0.5, 0.5)
-      wallL.setDepth(-1)
+    // Starting position
+    const start = LOCATIONS.center
 
-      const posR = gridToScreen(-1, i)
-      const wallR = this.add.image(posR.x, posR.y, 'wall_right')
-      wallR.setOrigin(0.5, 0.5)
-      wallR.setDepth(-1)
-    }
-
-    // Create the agent token
-    const center = gridToScreen(LOCATIONS.center.col, LOCATIONS.center.row)
-    const tokenY = center.y - 20
-
-    // Background circle — always renders, gives the token a solid base
-    this.tokenBg = this.add.circle(center.x, tokenY, 26, 0x1a1a26)
-    this.tokenBg.setStrokeStyle(3, 0x7c6fe0)
+    // Token background circle
+    this.tokenBg = this.add.circle(start.x, start.y, 30, 0x1a1a26)
+    this.tokenBg.setStrokeStyle(4, 0x7c6fe0)
     this.tokenBg.setDepth(999)
 
-    // Avatar image on top, sized to fit inside the circle
+    // Avatar image or fallback
     if (this.textures.exists('avatar')) {
-      this.agentToken = this.add.image(center.x, tokenY, 'avatar')
-      this.agentToken.setDisplaySize(44, 44)
+      this.agentToken = this.add.image(start.x, start.y, 'avatar')
+      this.agentToken.setDisplaySize(52, 52)
       this.agentToken.setDepth(1000)
     } else {
-      this.agentToken = this.add.circle(center.x, tokenY, 22, 0x7c6fe0)
+      this.agentToken = this.add.circle(start.x, start.y, 26, 0x7c6fe0)
       this.agentToken.setDepth(1000)
     }
 
     // Teal glow ring
-    this.tokenRing = this.add.circle(center.x, tokenY, 30)
-    this.tokenRing.setStrokeStyle(2, 0x4ecdc4, 0.9)
+    this.tokenRing = this.add.circle(start.x, start.y, 34)
+    this.tokenRing.setStrokeStyle(3, 0x4ecdc4, 0.9)
     this.tokenRing.setDepth(1001)
 
     // Location label
-    this.locationLabel = this.add.text(center.x, tokenY - 44, 'Home', {
+    this.locationLabel = this.add.text(start.x, start.y - 50, 'Home', {
       fontFamily: 'system-ui, sans-serif',
-      fontSize: '13px',
+      fontSize: '20px',
       color: '#f0eff8',
-      backgroundColor: '#1a1a26cc',
-      padding: { x: 8, y: 4 },
+      backgroundColor: '#12121acc',
+      padding: { x: 10, y: 5 },
     })
     this.locationLabel.setOrigin(0.5, 0.5)
     this.locationLabel.setDepth(1002)
 
     // Floating idle animation
-    this.tweens.add({
-      targets: [this.agentToken, this.tokenRing, this.tokenBg],
-      y: `-=6`,
-      duration: 1500,
+    this.floatTween = this.tweens.add({
+      targets: [this.agentToken, this.tokenBg, this.tokenRing],
+      y: '-=8',
+      duration: 1600,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
@@ -101,24 +80,20 @@ export class RoomScene extends Phaser.Scene {
     if (!loc || !this.agentToken) return
     if (locationKey === this.currentLocation) return
 
-    const { x, y } = gridToScreen(loc.col, loc.row)
-    const targetY = y - 20
+    if (this.floatTween) this.floatTween.stop()
 
-    // Stop the floating tween before moving
-    this.tweens.killTweensOf([this.agentToken, this.tokenRing, this.tokenBg])
-
+    const targets = [this.agentToken, this.tokenBg, this.tokenRing]
     this.tweens.add({
-      targets: [this.agentToken, this.tokenRing, this.tokenBg],
-      x,
-      y: targetY,
-      duration: 1200,
+      targets,
+      x: loc.x,
+      y: loc.y,
+      duration: 1400,
       ease: 'Cubic.easeInOut',
       onComplete: () => {
-        // Resume floating after arriving
-        this.tweens.add({
-          targets: [this.agentToken, this.tokenRing, this.tokenBg],
-          y: `-=6`,
-          duration: 1500,
+        this.floatTween = this.tweens.add({
+          targets,
+          y: '-=8',
+          duration: 1600,
           yoyo: true,
           repeat: -1,
           ease: 'Sine.easeInOut',
@@ -128,13 +103,11 @@ export class RoomScene extends Phaser.Scene {
 
     this.tweens.add({
       targets: this.locationLabel,
-      x,
-      y: targetY - 44,
-      duration: 1200,
+      x: loc.x,
+      y: loc.y - 50,
+      duration: 1400,
       ease: 'Cubic.easeInOut',
-      onComplete: () => {
-        this.locationLabel.setText(loc.label)
-      },
+      onComplete: () => this.locationLabel.setText(loc.label),
     })
 
     this.currentLocation = locationKey
