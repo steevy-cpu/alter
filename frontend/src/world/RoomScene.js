@@ -19,6 +19,7 @@ export class RoomScene extends Phaser.Scene {
   preload() {
     this.load.image('room', ROOM.imageUrl)
     if (this.avatarUrl) {
+      this.load.setCORS('anonymous')
       this.load.image('avatar', this.avatarUrl)
     }
   }

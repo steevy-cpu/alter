@@ -44,7 +44,7 @@ export default function World() {
   }, [eventFeed])
 
   const avatarUrl = agent?.name
-    ? `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(agent.name)}&backgroundColor=12121a&radius=50`
+    ? `https://api.dicebear.com/9.x/adventurer/png?seed=${encodeURIComponent(agent.name)}&backgroundColor=12121a&radius=50&size=128`
     : null
 
   return (
