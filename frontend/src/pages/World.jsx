@@ -68,6 +68,20 @@ export default function World() {
         </button>
       </div>
 
+      {/* TEMP debug: manual location triggers */}
+      <div style={{ display: 'flex', gap: '8px', padding: '8px var(--space-6)', flexWrap: 'wrap' }}>
+        {['bed', 'desk', 'bookshelf', 'couch', 'window', 'plant', 'center', 'door'].map((loc) => (
+          <button
+            key={loc}
+            className="btn-ghost"
+            style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+            onClick={() => setCurrentActivity('__force_' + loc)}
+          >
+            {loc}
+          </button>
+        ))}
+      </div>
+
       {/* Isometric canvas */}
       <div style={{
         width: '100%',

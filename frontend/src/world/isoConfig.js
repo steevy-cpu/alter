@@ -21,6 +21,9 @@ export const LOCATIONS = {
 
 // Map an event's text to a location key.
 export function activityToLocation(eventText) {
+  if (eventText && eventText.startsWith('__force_')) {
+    return eventText.replace('__force_', '')
+  }
   if (!eventText) return 'center'
   const t = eventText.toLowerCase()
   if (t.includes('sleep') || t.includes('wake') || t.includes('bed') || t.includes('morning') || t.includes('rest')) return 'bed'
